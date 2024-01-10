@@ -108,6 +108,11 @@ func (m *Migrator) MigrateAll() error {
 		return fmt.Errorf("failed to migrate users: %w", err)
 	}
 
+	color.Yellow("Migrating OAuth2 rels...")
+	if err := m.MigrateUsersOAuth2(); err != nil {
+		return fmt.Errorf("failed to migrate OAuth2 rels: %w", err)
+	}
+
 	color.Yellow("Migrating projects...")
 	if err := m.MigrateProjects(); err != nil {
 		return fmt.Errorf("failed to migrate projects: %w", err)

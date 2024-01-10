@@ -6,7 +6,7 @@ Small cli tool that takes care for migrating the database and uploaded files fro
 > [!WARNING]
 > Note that "Project Guidelines" are deprecated in Presentator v3 so they are skipped.
 >
-> OAuth2 linked auths are also not imported because they are expected to be linked automatically on first login (as long as the same email address as the original one is used). If you had previously manually linked an OAuth2 user to a Presentator account, you'll have to link it manually again (_Presentator v3 allows also linking to providers that doesn return an email address_).
+> If there are multiple OAuth2 accounts from the **same** provider linked to a single user (eg. 2 Google accounts associated to 1 Presentator user) the migration will keep only the last one linked.
 
 
 ## Setup
