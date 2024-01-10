@@ -1,0 +1,19 @@
+/.vscode/
+.idea
+.DS_Store
+
+# goreleaser builds folder
+/.builds/
+
+# plaintask todo files
+*.todo
+
+# generated markdown previews
+README.html
+CHANGELOG.html
+LICENSE.html
+
+# other local files and folders
+/pb_data/
+v2tov3migrate
+config.json
