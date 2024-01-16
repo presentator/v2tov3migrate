@@ -64,6 +64,7 @@ Small cli tool that takes care for migrating the database and uploaded files fro
    For more information on this, please refer to [Presentator v3 - Going to production](https://github.com/presentator/presentator#going-to-production).
 
 > [!TIP]
-> The migration tool is "incremental" and it should be safe to run multiple times because it will migrate only missing or changed records.
+> The migration tool is "incremental" and it should be safe to run multiple times.
+> It will attempt to sync new, changed or deleted records.
 >
-> This also means that in case of an error (eg. lack of disk space), next time when you start it again it should continue from where it left.
+> This also means that in case of an error (eg. lack of disk space), next time when you start it again it should be able to continue from where it left.

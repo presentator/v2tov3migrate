@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -163,17 +165,24 @@ func (m *Migrator) MigrateAll() error {
 	return nil
 }
 
-// Initializes a models.Record for migration (either new or for update).
-//
-// Returns nil if the record is already migrated and doesn't need resave.
-func (m *Migrator) initRecordToMigrate(collection *models.Collection, item baseModel, optIdPrefixes ...string) *models.Record {
+// buildRecordId constructs a Record id from the provided base model and optional prefixes.
+func (m *Migrator) buildRecordId(item baseModel, optIdPrefixes ...string) string {
 	itemId := v2Prefix
 	for _, p := range optIdPrefixes {
 		itemId += p
 	}
 	itemId += fmt.Sprintf("%d", item.Id)
 
-	record, _ := m.pbDao.FindRecordById(collection.Id, itemId)
+	return itemId
+}
+
+// initRecordToMigrate initializes a models.Record for migration (either new or for update).
+//
+// Returns nil if the record is already migrated and doesn't need resave.
+func (m *Migrator) initRecordToMigrate(collection *models.Collection, item baseModel, optIdPrefixes ...string) *models.Record {
+	id := m.buildRecordId(item, optIdPrefixes...)
+
+	record, _ := m.pbDao.FindRecordById(collection.Id, id)
 	if record != nil {
 		// already migrated -> check its updated date for changes
 		updated, _ := types.ParseDateTime(item.UpdatedAt)
@@ -183,10 +192,91 @@ func (m *Migrator) initRecordToMigrate(collection *models.Collection, item baseM
 	} else {
 		record = models.NewRecord(collection)
 		record.MarkAsNew()
-		record.SetId(itemId)
+		record.SetId(id)
 	}
 
 	return record
+}
+
+// dropTempIdsTable drops the temp_ids table used to store the currently
+// inserted migration script records id (see also [createTempIdsTable()]).
+func (m *Migrator) dropTempIdsTable() error {
+	_, err := m.pbDao.DB().NewQuery("DROP TABLE If EXISTS temp_ids").Execute()
+	return err
+}
+
+// createTempIdsTable creates a temp_ids table and populate it with the provided ids.
+//
+// If the temp table already exists it will be dropped before the creation.
+func (m *Migrator) createTempIdsTable(insertedIds []string) error {
+	if err := m.dropTempIdsTable(); err != nil {
+		return fmt.Errorf("failed to drop temp_ids table: %w", err)
+	}
+
+	_, createErr := m.pbDao.DB().NewQuery("CREATE TEMP TABLE temp_ids (id TEXT PRIMARY KEY NOT NULL)").Execute()
+	if createErr != nil {
+		return fmt.Errorf("failed to create temp_ids table: %w", createErr)
+	}
+
+	for _, id := range insertedIds {
+		_, err := m.pbDao.DB().Insert("temp_ids", dbx.Params{"id": id}).Execute()
+		if err != nil {
+			return fmt.Errorf("failed to insert temp id %q: %w", id, err)
+		}
+	}
+
+	return nil
+}
+
+// isNotEmptyCollection checks if the provided collection has at least 1 record.
+func (m *Migrator) isNotEmptyCollection(collection *models.Collection) bool {
+	var exists bool
+
+	err := m.pbDao.RecordQuery(collection).
+		Select("(1)").
+		Limit(1).
+		Row(&exists)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		color.Yellow("--WARN[%s]: failed to check whether the collection has any records - %s", collection.Name, err)
+	}
+
+	return err == nil && exists
+}
+
+// deleteMissingRecords deletes all records from the provided collection
+// that doesn't exist in the insertedIds slice.
+//
+// This method is no-op if the insertedIds slice is empty.
+//
+// Note that in case of an individual delete Record error,
+// the error is considered non-critical and will be just logged to the stderr.
+func (m *Migrator) deleteMissingRecords(collection *models.Collection, insertedIds []string) error {
+	if len(insertedIds) == 0 {
+		return nil // nothing previously inserted to compare with
+	}
+
+	if err := m.createTempIdsTable(insertedIds); err != nil {
+		return err
+	}
+	defer m.dropTempIdsTable()
+
+	var records []*models.Record
+
+	err := m.pbDao.RecordQuery(collection).
+		AndWhere(dbx.NewExp("id NOT IN (SELECT temp_ids.id FROM temp_ids)")).
+		All(&records)
+	if err != nil {
+		return fmt.Errorf("failed to fetch records to remove: %w", err)
+	}
+
+	for _, r := range records {
+		if err := m.pbDao.DeleteRecord(r); err != nil {
+			// ignore the error and log only for debug
+			color.Yellow("--WARN[%s]: Failed to delete previously inserted record %q (raw error: %s)", collection.Name, r.Id, err)
+		}
+	}
+
+	return nil
 }
 
 // batchCopyFiles copies all the specified files from the configured v2 to v3 storage location.

@@ -11,6 +11,9 @@ func (m *Migrator) MigrateScreens() error {
 		return err
 	}
 
+	hasOldRecords := m.isNotEmptyCollection(collection)
+	insertedIds := make([]string, 0, 1000)
+
 	limit := 1000
 	items := make([]*v2Screen, 0, limit)
 	for i := 0; ; i++ {
@@ -26,6 +29,8 @@ func (m *Migrator) MigrateScreens() error {
 		filesToCopy := make(map[string]string, len(items))
 
 		for _, item := range items {
+			insertedIds = append(insertedIds, m.buildRecordId(item.baseModel))
+
 			record := m.initRecordToMigrate(collection, item.baseModel)
 			if record == nil {
 				continue // already migrated
@@ -63,6 +68,10 @@ func (m *Migrator) MigrateScreens() error {
 		}
 
 		items = items[:0]
+	}
+
+	if hasOldRecords {
+		return m.deleteMissingRecords(collection, insertedIds)
 	}
 
 	return nil
