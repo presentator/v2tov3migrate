@@ -1,4 +1,4 @@
-project_name: presentator
+project_name: v2tov3migrate
 
 dist: .builds
 
@@ -9,7 +9,7 @@ before:
 builds:
   - id: build_noncgo
     main: ./
-    binary: presentator
+    binary: v2tov3migrate
     ldflags:
       - -s -w
     env:

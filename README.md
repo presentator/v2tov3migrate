@@ -1,12 +1,15 @@
-(WIP) Presentator v2 to v3 migration tool
+Presentator v2 to v3 migration tool
 ======================================================================
 
-Small cli tool that takes care for migrating the database and uploaded files from Presentator v2 to v3.
+CLI that takes care for migrating the database and uploaded files from Presentator v2 to v3.
 
-> [!WARNING]
-> Note that "Project Guidelines" are deprecated in Presentator v3 so they are skipped.
->
-> If there are multiple OAuth2 accounts from the **same** provider linked to a single user (eg. 2 Google accounts associated to 1 Presentator user) the migration will keep only the last one linked.
+With that said, there are some notable and breaking changes in Presentator v3:
+
+- If there are multiple OAuth2 accounts from the **same** provider linked to a single Presentator user (eg. 2 Google accounts associated to 1 Presentator user) the migration will keep only the last one linked.
+
+- The "Project Guidelines" are deprecated and no longer available.
+
+- For "super-admin" access you could use the PocketBase Admin UI located at `https://yourPresentatorApp.com/_/`.
 
 
 ## Setup
@@ -64,7 +67,7 @@ Small cli tool that takes care for migrating the database and uploaded files fro
    For more information on this, please refer to [Presentator v3 - Going to production](https://github.com/presentator/presentator#going-to-production).
 
 > [!TIP]
-> The migration tool is "incremental" and it should be safe to run multiple times.
+> The migration tool is "incremental" and it could be run multiple times.
 > It will attempt to sync new, changed or deleted records.
 >
 > This also means that in case of an error (eg. lack of disk space), next time when you start it again it should be able to continue from where it left.
