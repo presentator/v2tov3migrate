@@ -24,7 +24,7 @@ With that said, there are some notable and breaking changes in Presentator v3:
 
     Navigate to the extracted directory and start the executable with `./presentator serve`.
 
-    Go to your browser and open `http://127.0.0.1:8090/_/` to configure the appropiate app settings from the PocketBase Admin UI > Settings, including the S3 file storage credentials if you are planning to use one.
+    Go to your browser and open `http://127.0.0.1:8090/_/` to configure the appropriate app settings from the PocketBase Admin UI > Settings, including the S3 file storage credentials if you are planning to use one.
 
     Once done, you can stop the process and will notice that it has created a `pb_data` directory next to the executable. This is where your Presentator v3 app data lives and when deploying on production it will be enough to just upload only the executable and the `pb_data` directory, but more on that later.
 
@@ -46,7 +46,7 @@ With that said, there are some notable and breaking changes in Presentator v3:
         "v3DataDir":      "./pb_data", // path to the pb_data dir
         "v2DBDriver":     "mysql", // "pgx" for PostgreSQL
         "v2DBConnection": "username:password@address/dbname", // must be a valid DSN
-        "V2S3Storage": {
+        "v2S3Storage": {
             "endpoint":       "",
             "bucket":         "",
             "region":         "",
