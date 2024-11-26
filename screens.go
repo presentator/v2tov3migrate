@@ -3,10 +3,12 @@ package main
 import (
 	"fmt"
 	"path"
+
+	"github.com/pocketbase/pocketbase/tools/types"
 )
 
 func (m *Migrator) MigrateScreens() error {
-	collection, err := m.pbDao.FindCollectionByNameOrId("screens")
+	collection, err := m.pbApp.FindCollectionByNameOrId("screens")
 	if err != nil {
 		return err
 	}
@@ -36,8 +38,12 @@ func (m *Migrator) MigrateScreens() error {
 				continue // already migrated
 			}
 
-			record.Set("created", item.CreatedAt)
-			record.Set("updated", item.UpdatedAt)
+			createdAt, _ := types.ParseDateTime(item.CreatedAt)
+			record.SetRaw("created", createdAt)
+
+			updatedAt, _ := types.ParseDateTime(item.UpdatedAt)
+			record.SetRaw("updated", updatedAt)
+
 			record.Set("prototype", fmt.Sprintf("%s%d", v2Prefix, item.PrototypeId))
 			record.Set("title", item.Title)
 			record.Set("alignment", item.Alignment)
@@ -46,7 +52,7 @@ func (m *Migrator) MigrateScreens() error {
 			record.Set("fixedFooter", item.FixedFooter)
 			record.Set("file", path.Base(item.FilePath))
 
-			if err := m.pbDao.SaveRecord(record); err != nil {
+			if err := m.pbApp.SaveNoValidate(record); err != nil {
 				// try to copy batched files so that we can continue from where we left
 				if copyErr := m.batchCopyFiles(filesToCopy, 500, "screen_file"); copyErr != nil {
 					return fmt.Errorf("failed to save %q and to copy all screen files: %w; %w", record.Id, err, copyErr)

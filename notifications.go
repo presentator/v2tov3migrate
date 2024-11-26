@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+
+	"github.com/pocketbase/pocketbase/tools/types"
 )
 
 func (m *Migrator) MigrateNotifications() error {
-	collection, err := m.pbDao.FindCollectionByNameOrId("notifications")
+	collection, err := m.pbApp.FindCollectionByNameOrId("notifications")
 	if err != nil {
 		return err
 	}
@@ -33,14 +35,18 @@ func (m *Migrator) MigrateNotifications() error {
 				continue // already migrated
 			}
 
-			record.Set("created", item.CreatedAt)
-			record.Set("updated", item.UpdatedAt)
+			createdAt, _ := types.ParseDateTime(item.CreatedAt)
+			record.SetRaw("created", createdAt)
+
+			updatedAt, _ := types.ParseDateTime(item.UpdatedAt)
+			record.SetRaw("updated", updatedAt)
+
 			record.Set("user", fmt.Sprintf("%s%d", v2Prefix, item.UserId))
 			record.Set("comment", fmt.Sprintf("%s%d", v2Prefix, item.ScreenCommentId))
 			record.Set("read", item.IsRead)
 			record.Set("processed", item.IsProcessed)
 
-			if err := m.pbDao.SaveRecord(record); err != nil {
+			if err := m.pbApp.SaveNoValidate(record); err != nil {
 				return fmt.Errorf("failed to save %q: %w", record.Id, err)
 			}
 		}

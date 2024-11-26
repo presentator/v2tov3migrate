@@ -4,13 +4,13 @@ import (
 	"fmt"
 
 	"github.com/pocketbase/dbx"
-	"github.com/pocketbase/pocketbase/models"
+	"github.com/pocketbase/pocketbase/core"
 	"github.com/pocketbase/pocketbase/tools/list"
 	"github.com/pocketbase/pocketbase/tools/types"
 )
 
 func (m *Migrator) MigrateUsersOAuth2() error {
-	collection, err := m.pbDao.FindCollectionByNameOrId("users")
+	collection, err := m.pbApp.FindCollectionByNameOrId("users")
 	if err != nil {
 		return err
 	}
@@ -43,27 +43,31 @@ func (m *Migrator) MigrateUsersOAuth2() error {
 		for _, item := range items {
 			itemId := fmt.Sprintf("%s%d", v2Prefix, item.Id)
 
-			var ea *models.ExternalAuth
-			if ea, _ = m.pbDao.FindFirstExternalAuthByExpr(dbx.HashExp{"id": itemId}); ea != nil {
+			var ea *core.ExternalAuth
+			if ea, _ = m.pbApp.FindFirstExternalAuthByExpr(dbx.HashExp{"id": itemId}); ea != nil {
 				// already migrated -> check its updated date for changes
 				updated, _ := types.ParseDateTime(item.UpdatedAt)
-				if updated.Time().Unix() == ea.Updated.Time().Unix() {
+				if updated.Time().Unix() == ea.GetDateTime("updated").Time().Unix() {
 					continue
 				}
 			} else {
-				ea = &models.ExternalAuth{}
+				ea = core.NewExternalAuth(m.pbApp)
 				ea.MarkAsNew()
 				ea.Id = itemId
 			}
 
-			ea.Created, _ = types.ParseDateTime(item.CreatedAt)
-			ea.Updated, _ = types.ParseDateTime(item.UpdatedAt)
-			ea.CollectionId = collection.Id
-			ea.Provider = item.Source
-			ea.ProviderId = item.SourceId
-			ea.RecordId = fmt.Sprintf("%s%d", v2Prefix, item.UserId)
+			createdAt, _ := types.ParseDateTime(item.CreatedAt)
+			ea.SetRaw("created", createdAt)
 
-			if err := m.pbDao.SaveExternalAuth(ea); err != nil {
+			updatedAt, _ := types.ParseDateTime(item.UpdatedAt)
+			ea.SetRaw("updated", updatedAt)
+
+			ea.SetCollectionRef(collection.Id)
+			ea.SetRecordRef(fmt.Sprintf("%s%d", v2Prefix, item.UserId))
+			ea.SetProvider(item.Source)
+			ea.SetProviderId(item.SourceId)
+
+			if err := m.pbApp.SaveNoValidate(ea); err != nil {
 				return fmt.Errorf("failed to save %q: %w", ea.Id, err)
 			}
 		}

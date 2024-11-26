@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/pocketbase/pocketbase/tools/types"
 	"github.com/spf13/cast"
 )
 
 func (m *Migrator) MigrateHotspots() error {
-	collection, err := m.pbDao.FindCollectionByNameOrId("hotspots")
+	collection, err := m.pbApp.FindCollectionByNameOrId("hotspots")
 	if err != nil {
 		return err
 	}
@@ -36,8 +37,12 @@ func (m *Migrator) MigrateHotspots() error {
 				continue // already migrated
 			}
 
-			record.Set("created", item.CreatedAt)
-			record.Set("updated", item.UpdatedAt)
+			createdAt, _ := types.ParseDateTime(item.CreatedAt)
+			record.SetRaw("created", createdAt)
+
+			updatedAt, _ := types.ParseDateTime(item.UpdatedAt)
+			record.SetRaw("updated", updatedAt)
+
 			record.Set("left", item.Left)
 			record.Set("top", item.Top)
 			record.Set("width", item.Width)
@@ -70,7 +75,7 @@ func (m *Migrator) MigrateHotspots() error {
 				record.Set("settings", settings)
 			}
 
-			if err := m.pbDao.SaveRecord(record); err != nil {
+			if err := m.pbApp.SaveNoValidate(record); err != nil {
 				return fmt.Errorf("failed to save %q: %w", record.Id, err)
 			}
 		}

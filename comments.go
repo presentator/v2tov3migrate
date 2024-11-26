@@ -4,10 +4,11 @@ import (
 	"fmt"
 
 	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/tools/types"
 )
 
 func (m *Migrator) MigrateScreenComments() error {
-	collection, err := m.pbDao.FindCollectionByNameOrId("comments")
+	collection, err := m.pbApp.FindCollectionByNameOrId("comments")
 	if err != nil {
 		return err
 	}
@@ -35,8 +36,12 @@ func (m *Migrator) MigrateScreenComments() error {
 				continue // already migrated
 			}
 
-			record.Set("created", item.CreatedAt)
-			record.Set("updated", item.UpdatedAt)
+			createdAt, _ := types.ParseDateTime(item.CreatedAt)
+			record.SetRaw("created", createdAt)
+
+			updatedAt, _ := types.ParseDateTime(item.UpdatedAt)
+			record.SetRaw("updated", updatedAt)
+
 			record.Set("message", item.Message)
 			record.Set("left", item.Left)
 			record.Set("top", item.Top)
@@ -69,7 +74,7 @@ func (m *Migrator) MigrateScreenComments() error {
 			}
 			// ---
 
-			if err := m.pbDao.SaveRecord(record); err != nil {
+			if err := m.pbApp.SaveNoValidate(record); err != nil {
 				return fmt.Errorf("failed to save %q: %w", record.Id, err)
 			}
 		}

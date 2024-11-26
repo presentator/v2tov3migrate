@@ -4,10 +4,11 @@ import (
 	"fmt"
 
 	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/tools/types"
 )
 
 func (m *Migrator) MigrateLinks() error {
-	collection, err := m.pbDao.FindCollectionByNameOrId("links")
+	collection, err := m.pbApp.FindCollectionByNameOrId("links")
 	if err != nil {
 		return err
 	}
@@ -35,19 +36,23 @@ func (m *Migrator) MigrateLinks() error {
 				continue // already migrated
 			}
 
-			record.Set("created", item.CreatedAt)
-			record.Set("updated", item.UpdatedAt)
+			createdAt, _ := types.ParseDateTime(item.CreatedAt)
+			record.SetRaw("created", createdAt)
+
+			updatedAt, _ := types.ParseDateTime(item.UpdatedAt)
+			record.SetRaw("updated", updatedAt)
+
 			record.Set("project", fmt.Sprintf("%s%d", v2Prefix, item.ProjectId))
 			record.Set("username", item.Slug)
 			record.Set("allowComments", item.AllowComments)
 
 			record.RefreshTokenKey()
 			if item.PasswordHash != nil && *item.PasswordHash != "" {
-				record.Set("passwordHash", *item.PasswordHash)
+				record.SetRaw("password", *item.PasswordHash)
 				record.Set("passwordProtect", true)
 			} else {
-				// pb123456 (the value doesn't matter in this case)
-				record.Set("passwordHash", "$2a$10$MpFMEPzs4zLHtrUKZybjL.VTDActqyMbkQNcuP4oRHt7m6f9u71Ny")
+				// the value doesn't matter in this case
+				record.Set("password", "pb123456")
 				record.Set("passwordProtect", false)
 			}
 
@@ -57,7 +62,7 @@ func (m *Migrator) MigrateLinks() error {
 			}
 			record.Set("onlyPrototypes", prototypeIds)
 
-			if err := m.pbDao.SaveRecord(record); err != nil {
+			if err := m.pbApp.SaveNoValidate(record); err != nil {
 				return fmt.Errorf("failed to save %q: %w", record.Id, err)
 			}
 		}

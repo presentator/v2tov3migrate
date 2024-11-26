@@ -4,11 +4,12 @@ import (
 	"fmt"
 
 	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/tools/types"
 	"github.com/spf13/cast"
 )
 
 func (m *Migrator) MigratePrototypes() error {
-	collection, err := m.pbDao.FindCollectionByNameOrId("prototypes")
+	collection, err := m.pbApp.FindCollectionByNameOrId("prototypes")
 	if err != nil {
 		return err
 	}
@@ -36,8 +37,12 @@ func (m *Migrator) MigratePrototypes() error {
 				continue // already migrated
 			}
 
-			record.Set("created", item.CreatedAt)
-			record.Set("updated", item.UpdatedAt)
+			createdAt, _ := types.ParseDateTime(item.CreatedAt)
+			record.SetRaw("created", createdAt)
+
+			updatedAt, _ := types.ParseDateTime(item.UpdatedAt)
+			record.SetRaw("updated", updatedAt)
+
 			record.Set("project", fmt.Sprintf("%s%d", v2Prefix, item.ProjectId))
 			record.Set("scale", item.ScaleFactor)
 			if item.Type != "desktop" {
@@ -55,7 +60,7 @@ func (m *Migrator) MigratePrototypes() error {
 			// prototype with the same title in the project
 			// (in the old version we allowed duplicates)
 			for i := 2; i <= 10; i++ {
-				_, err := m.pbDao.FindFirstRecordByFilter(collection.Id, "title={:title} && project={:project}", dbx.Params{
+				_, err := m.pbApp.FindFirstRecordByFilter(collection.Id, "title={:title} && project={:project}", dbx.Params{
 					"title":   record.GetString("title"),
 					"project": record.GetString("project"),
 				})
@@ -66,7 +71,7 @@ func (m *Migrator) MigratePrototypes() error {
 				}
 			}
 
-			if err := m.pbDao.SaveRecord(record); err != nil {
+			if err := m.pbApp.SaveNoValidate(record); err != nil {
 				return fmt.Errorf("failed to save %q: %w", record.Id, err)
 			}
 		}

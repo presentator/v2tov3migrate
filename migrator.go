@@ -10,8 +10,6 @@ import (
 	"github.com/fatih/color"
 	"github.com/pocketbase/dbx"
 	"github.com/pocketbase/pocketbase/core"
-	"github.com/pocketbase/pocketbase/daos"
-	"github.com/pocketbase/pocketbase/models"
 	"github.com/pocketbase/pocketbase/tools/filesystem"
 	"github.com/pocketbase/pocketbase/tools/types"
 	"golang.org/x/sync/errgroup"
@@ -39,7 +37,7 @@ const v2Prefix string = "pr2_"
 //	}
 func NewMigrator(app core.App, config *Config) (*Migrator, error) {
 	m := &Migrator{
-		pbDao: app.Dao(),
+		pbApp: app,
 	}
 
 	var errOldDB error
@@ -79,7 +77,7 @@ func NewMigrator(app core.App, config *Config) (*Migrator, error) {
 
 type Migrator struct {
 	oldDB *dbx.DB
-	pbDao *daos.Dao
+	pbApp core.App
 	oldFS *filesystem.System
 	newFS *filesystem.System
 }
@@ -176,13 +174,13 @@ func (m *Migrator) buildRecordId(item baseModel, optIdPrefixes ...string) string
 	return itemId
 }
 
-// initRecordToMigrate initializes a models.Record for migration (either new or for update).
+// initRecordToMigrate initializes a core.Record for migration (either new or for update).
 //
 // Returns nil if the record is already migrated and doesn't need resave.
-func (m *Migrator) initRecordToMigrate(collection *models.Collection, item baseModel, optIdPrefixes ...string) *models.Record {
+func (m *Migrator) initRecordToMigrate(collection *core.Collection, item baseModel, optIdPrefixes ...string) *core.Record {
 	id := m.buildRecordId(item, optIdPrefixes...)
 
-	record, _ := m.pbDao.FindRecordById(collection.Id, id)
+	record, _ := m.pbApp.FindRecordById(collection, id)
 	if record != nil {
 		// already migrated -> check its updated date for changes
 		updated, _ := types.ParseDateTime(item.UpdatedAt)
@@ -190,9 +188,9 @@ func (m *Migrator) initRecordToMigrate(collection *models.Collection, item baseM
 			return nil
 		}
 	} else {
-		record = models.NewRecord(collection)
+		record = core.NewRecord(collection)
+		record.Id = id
 		record.MarkAsNew()
-		record.SetId(id)
 	}
 
 	return record
@@ -201,7 +199,7 @@ func (m *Migrator) initRecordToMigrate(collection *models.Collection, item baseM
 // dropTempIdsTable drops the temp_ids table used to store the currently
 // inserted migration script records id (see also [createTempIdsTable()]).
 func (m *Migrator) dropTempIdsTable() error {
-	_, err := m.pbDao.DB().NewQuery("DROP TABLE If EXISTS temp_ids").Execute()
+	_, err := m.pbApp.DB().NewQuery("DROP TABLE If EXISTS temp_ids").Execute()
 	return err
 }
 
@@ -213,13 +211,13 @@ func (m *Migrator) createTempIdsTable(insertedIds []string) error {
 		return fmt.Errorf("failed to drop temp_ids table: %w", err)
 	}
 
-	_, createErr := m.pbDao.DB().NewQuery("CREATE TEMP TABLE temp_ids (id TEXT PRIMARY KEY NOT NULL)").Execute()
+	_, createErr := m.pbApp.DB().NewQuery("CREATE TEMP TABLE temp_ids (id TEXT PRIMARY KEY NOT NULL)").Execute()
 	if createErr != nil {
 		return fmt.Errorf("failed to create temp_ids table: %w", createErr)
 	}
 
 	for _, id := range insertedIds {
-		_, err := m.pbDao.DB().Insert("temp_ids", dbx.Params{"id": id}).Execute()
+		_, err := m.pbApp.DB().Insert("temp_ids", dbx.Params{"id": id}).Execute()
 		if err != nil {
 			return fmt.Errorf("failed to insert temp id %q: %w", id, err)
 		}
@@ -229,10 +227,10 @@ func (m *Migrator) createTempIdsTable(insertedIds []string) error {
 }
 
 // isNotEmptyCollection checks if the provided collection has at least 1 record.
-func (m *Migrator) isNotEmptyCollection(collection *models.Collection) bool {
+func (m *Migrator) isNotEmptyCollection(collection *core.Collection) bool {
 	var exists bool
 
-	err := m.pbDao.RecordQuery(collection).
+	err := m.pbApp.RecordQuery(collection).
 		Select("(1)").
 		Limit(1).
 		Row(&exists)
@@ -250,7 +248,7 @@ func (m *Migrator) isNotEmptyCollection(collection *models.Collection) bool {
 //
 // Note that in case of an individual delete Record error,
 // the error is considered non-critical and will be just logged to the stderr.
-func (m *Migrator) deleteMissingRecords(collection *models.Collection, insertedIds []string) error {
+func (m *Migrator) deleteMissingRecords(collection *core.Collection, insertedIds []string) error {
 	if len(insertedIds) == 0 {
 		return nil // nothing previously inserted to compare with
 	}
@@ -260,9 +258,9 @@ func (m *Migrator) deleteMissingRecords(collection *models.Collection, insertedI
 	}
 	defer m.dropTempIdsTable()
 
-	var records []*models.Record
+	var records []*core.Record
 
-	err := m.pbDao.RecordQuery(collection).
+	err := m.pbApp.RecordQuery(collection).
 		AndWhere(dbx.NewExp("id NOT IN (SELECT temp_ids.id FROM temp_ids)")).
 		All(&records)
 	if err != nil {
@@ -270,7 +268,7 @@ func (m *Migrator) deleteMissingRecords(collection *models.Collection, insertedI
 	}
 
 	for _, r := range records {
-		if err := m.pbDao.DeleteRecord(r); err != nil {
+		if err := m.pbApp.Delete(r); err != nil {
 			// ignore the error and log only for debug
 			color.Yellow("--WARN[%s]: Failed to delete previously inserted record %q (raw error: %s)", collection.Name, r.Id, err)
 		}

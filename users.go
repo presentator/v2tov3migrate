@@ -5,11 +5,15 @@ import (
 	"path"
 	"strings"
 
+	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/core"
+	"github.com/pocketbase/pocketbase/tools/security"
+	"github.com/pocketbase/pocketbase/tools/types"
 	"github.com/spf13/cast"
 )
 
 func (m *Migrator) MigrateUsers() error {
-	collection, err := m.pbDao.FindCollectionByNameOrId("users")
+	collection, err := m.pbApp.FindCollectionByNameOrId("users")
 	if err != nil {
 		return err
 	}
@@ -39,18 +43,22 @@ func (m *Migrator) MigrateUsers() error {
 				continue // already migrated
 			}
 
-			record.Set("created", item.CreatedAt)
-			record.Set("updated", item.UpdatedAt)
+			createdAt, _ := types.ParseDateTime(item.CreatedAt)
+			record.SetRaw("created", createdAt)
+
+			updatedAt, _ := types.ParseDateTime(item.UpdatedAt)
+			record.SetRaw("updated", updatedAt)
+
 			record.SetVerified(item.Status == "active")
 			record.SetEmail(item.Email)
 			record.SetEmailVisibility(false)
-			record.Set("passwordHash", item.PasswordHash)
+			record.SetRaw("password", item.PasswordHash)
 			record.RefreshTokenKey()
 
 			// generate username
 			localPart, _, _ := strings.Cut(item.Email, "@")
-			username := m.pbDao.SuggestUniqueAuthRecordUsername("users", localPart)
-			record.SetUsername(username)
+			username := suggestUniqueAuthRecordUsername(m.pbApp, "users", localPart)
+			record.Set("username", username)
 
 			record.Set("name", strings.TrimSpace(cast.ToString(item.FirstName)+" "+cast.ToString(item.LastName)))
 
@@ -65,7 +73,7 @@ func (m *Migrator) MigrateUsers() error {
 				filesToCopy[oldAvatarKey] = record.BaseFilesPath() + "/" + record.GetString("avatar")
 			}
 
-			if err := m.pbDao.SaveRecord(record); err != nil {
+			if err := m.pbApp.SaveNoValidate(record); err != nil {
 				// try to copy batched files so that we can continue from where we left
 				if copyErr := m.batchCopyFiles(filesToCopy, 500, "user_avatars"); copyErr != nil {
 					return fmt.Errorf("failed to save %q and to copy all user avatars: %w; %w", record.Id, err, copyErr)
@@ -91,4 +99,25 @@ func (m *Migrator) MigrateUsers() error {
 	}
 
 	return nil
+}
+
+func suggestUniqueAuthRecordUsername(
+	app core.App,
+	collectionNameOrId string,
+	baseUsername string,
+) string {
+	username := baseUsername
+
+	for i := 0; i < 100; i++ { // max 100 attempts
+		total, err := app.CountRecords(
+			collectionNameOrId,
+			dbx.NewExp("LOWER([[username]])={:username}", dbx.Params{"username": strings.ToLower(username)}),
+		)
+		if total == 0 && err == nil {
+			break // already unique
+		}
+		username = baseUsername + security.RandomStringWithAlphabet(3+i, "123456789")
+	}
+
+	return username
 }

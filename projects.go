@@ -4,10 +4,11 @@ import (
 	"fmt"
 
 	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/tools/types"
 )
 
 func (m *Migrator) MigrateProjects() error {
-	collection, err := m.pbDao.FindCollectionByNameOrId("projects")
+	collection, err := m.pbApp.FindCollectionByNameOrId("projects")
 	if err != nil {
 		return err
 	}
@@ -35,8 +36,12 @@ func (m *Migrator) MigrateProjects() error {
 				continue // already migrated
 			}
 
-			record.Set("created", item.CreatedAt)
-			record.Set("updated", item.UpdatedAt)
+			createdAt, _ := types.ParseDateTime(item.CreatedAt)
+			record.SetRaw("created", createdAt)
+
+			updatedAt, _ := types.ParseDateTime(item.UpdatedAt)
+			record.SetRaw("updated", updatedAt)
+
 			record.Set("archived", item.Archived)
 			record.Set("title", item.Title)
 
@@ -46,7 +51,7 @@ func (m *Migrator) MigrateProjects() error {
 			}
 			record.Set("users", userIds)
 
-			if err := m.pbDao.SaveRecord(record); err != nil {
+			if err := m.pbApp.SaveNoValidate(record); err != nil {
 				return fmt.Errorf("failed to save %q: %w", record.Id, err)
 			}
 		}

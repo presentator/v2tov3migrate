@@ -4,10 +4,11 @@ import (
 	"fmt"
 
 	"github.com/pocketbase/dbx"
+	"github.com/pocketbase/pocketbase/tools/types"
 )
 
 func (m *Migrator) MigrateHotspotTemplates() error {
-	collection, err := m.pbDao.FindCollectionByNameOrId("hotspotTemplates")
+	collection, err := m.pbApp.FindCollectionByNameOrId("hotspotTemplates")
 	if err != nil {
 		return err
 	}
@@ -35,8 +36,12 @@ func (m *Migrator) MigrateHotspotTemplates() error {
 				continue // already migrated
 			}
 
-			record.Set("created", item.CreatedAt)
-			record.Set("updated", item.UpdatedAt)
+			createdAt, _ := types.ParseDateTime(item.CreatedAt)
+			record.SetRaw("created", createdAt)
+
+			updatedAt, _ := types.ParseDateTime(item.UpdatedAt)
+			record.SetRaw("updated", updatedAt)
+
 			record.Set("prototype", fmt.Sprintf("%s%d", v2Prefix, item.PrototypeId))
 
 			screenIds, err := m.getPrefixedTemplateScreenIds(item.Id)
@@ -50,7 +55,7 @@ func (m *Migrator) MigrateHotspotTemplates() error {
 			// template with the same title in the prototype
 			// (in the old version we allowed duplicates)
 			for i := 2; i <= 10; i++ {
-				_, err := m.pbDao.FindFirstRecordByFilter(collection.Id, "title={:title} && prototype={:prototype}", dbx.Params{
+				_, err := m.pbApp.FindFirstRecordByFilter(collection.Id, "title={:title} && prototype={:prototype}", dbx.Params{
 					"title":     record.GetString("title"),
 					"prototype": record.GetString("prototype"),
 				})
@@ -61,7 +66,7 @@ func (m *Migrator) MigrateHotspotTemplates() error {
 				}
 			}
 
-			if err := m.pbDao.SaveRecord(record); err != nil {
+			if err := m.pbApp.SaveNoValidate(record); err != nil {
 				return fmt.Errorf("failed to save %q: %w", record.Id, err)
 			}
 		}
